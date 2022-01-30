@@ -36,6 +36,7 @@
 #include <fcntl.h>
 
 #include "wlr-screencopy-unstable-v1.h"
+#include "screencopy-unstable-v1.h"
 #include "wlr-virtual-pointer-unstable-v1.h"
 #include "virtual-keyboard-unstable-v1.h"
 #include "xdg-output-unstable-v1.h"
@@ -80,6 +81,7 @@ struct wayvnc {
 	struct zwp_virtual_keyboard_manager_v1* keyboard_manager;
 	struct zwlr_virtual_pointer_manager_v1* pointer_manager;
 	struct zwlr_screencopy_manager_v1* screencopy_manager;
+	struct zext_screencopy_manager_v1* ext_screencopy_manager;
 
 	const struct output* selected_output;
 	const struct seat* selected_seat;
@@ -119,7 +121,7 @@ struct wl_shm* wl_shm = NULL;
 struct zwp_linux_dmabuf_v1* zwp_linux_dmabuf = NULL;
 struct gbm_device* gbm_device = NULL;
 
-extern struct screencopy_impl wlr_screencopy_impl;
+extern struct screencopy_impl wlr_screencopy_impl, ext_screencopy_impl;
 
 static void registry_add(void* data, struct wl_registry* registry,
 			 uint32_t id, const char* interface,
@@ -158,6 +160,14 @@ static void registry_add(void* data, struct wl_registry* registry,
 			wl_registry_bind(registry, id,
 					 &zwlr_screencopy_manager_v1_interface,
 					 MIN(3, version));
+		return;
+	}
+
+	if (strcmp(interface, zext_screencopy_manager_v1_interface.name) == 0) {
+		self->ext_screencopy_manager =
+			wl_registry_bind(registry, id,
+					 &zext_screencopy_manager_v1_interface,
+					 MIN(1, version));
 		return;
 	}
 
@@ -306,6 +316,8 @@ void wayvnc_destroy(struct wayvnc* self)
 
 	if (self->screencopy_manager)
 		zwlr_screencopy_manager_v1_destroy(self->screencopy_manager);
+	if (self->ext_screencopy_manager)
+		zext_screencopy_manager_v1_destroy(self->ext_screencopy_manager);
 	if (self->data_control.manager)
 		zwlr_data_control_manager_v1_destroy(self->data_control.manager);
 
@@ -365,7 +377,7 @@ static int init_wayland(struct wayvnc* self, bool disable_input)
 	wl_display_dispatch(self->display);
 	wl_display_roundtrip(self->display);
 
-	if (!self->screencopy_manager) {
+	if (!self->screencopy_manager && !self->ext_screencopy_manager) {
 		log_error("Compositor doesn't support screencopy! Exiting.\n");
 		goto failure;
 	}
@@ -949,7 +961,16 @@ int main(int argc, char* argv[])
 	if (init_nvnc(&self, address, port, use_unix_socket) < 0)
 		goto nvnc_failure;
 
-	if (self.screencopy_manager) {
+	if (self.ext_screencopy_manager) {
+		self.screencopy = screencopy_create(&ext_screencopy_impl,
+				self.ext_screencopy_manager,
+				self.selected_output->wl_output,
+				overlay_cursor, on_capture_done, &self);
+		if (!self.screencopy)
+			goto screencopy_failure;
+
+		self.screencopy->rate_limit = max_rate;
+	} else if (self.screencopy_manager) {
 		self.screencopy = screencopy_create(&wlr_screencopy_impl,
 				self.screencopy_manager,
 				self.selected_output->wl_output,
