@@ -87,6 +87,7 @@ static void ext_screencopy_schedule_capture(struct ext_screencopy* self,
 		bool immediate)
 {
 	self->buffer = wv_buffer_pool_acquire(self->pool);
+	self->buffer->domain = WV_BUFFER_DOMAIN_OUTPUT;
 
 	zext_screencopy_surface_v1_attach_buffer(self->surface,
 			self->buffer->wl_buffer);
@@ -115,6 +116,12 @@ static void ext_screencopy_schedule_capture(struct ext_screencopy* self,
 
 	if (self->have_cursor) {
 		self->cursor_buffer = wv_buffer_pool_acquire(self->cursor_pool);
+		self->cursor_buffer->domain = WV_BUFFER_DOMAIN_CURSOR;
+
+		if (pixman_region_not_empty(&self->cursor_buffer->buffer_damage))
+			zext_screencopy_surface_v1_damage_cursor_buffer(
+					self->surface, "default");
+
 		zext_screencopy_surface_v1_attach_cursor_buffer(self->surface,
 				self->cursor_buffer->wl_buffer, "default");
 	}
@@ -267,7 +274,8 @@ static void surface_handle_ready(void *data,
 
 	assert(self->buffer);
 
-	wv_buffer_registry_damage_all(&self->buffer->frame_damage);
+	wv_buffer_registry_damage_all(&self->buffer->frame_damage,
+			WV_BUFFER_DOMAIN_OUTPUT);
 	pixman_region_clear(&self->buffer->buffer_damage);
 
 	struct wv_buffer* buffer = self->buffer;
@@ -309,9 +317,19 @@ static void surface_handle_cursor_info(void *data,
 		int has_damage, int32_t pos_x, int32_t pos_y,
 		int32_t hotspot_x, int32_t hotspot_y)
 {
-	log_debug("Cursor info: pos %"PRIi32" %"PRIi32"\n", pos_x, pos_y);
+	struct ext_screencopy* self = data;
 
-	// TODO
+	if (has_damage)
+		wv_buffer_damage_whole(self->cursor_buffer);
+
+	wv_buffer_registry_damage_all(&self->cursor_buffer->frame_damage,
+			WV_BUFFER_DOMAIN_CURSOR);
+	pixman_region_clear(&self->cursor_buffer->buffer_damage);
+
+	// TODO: Implement
+
+	// TODO: Remove this after implementing:
+	wv_buffer_pool_release(self->cursor_pool, self->cursor_buffer);
 }
 
 static void surface_handle_cursor_enter(void *data,
