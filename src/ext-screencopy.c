@@ -278,10 +278,21 @@ static void surface_handle_ready(void *data,
 			WV_BUFFER_DOMAIN_OUTPUT);
 	pixman_region_clear(&self->buffer->buffer_damage);
 
+	if (self->cursor_buffer) {
+		wv_buffer_registry_damage_all(&self->cursor_buffer->frame_damage,
+				WV_BUFFER_DOMAIN_CURSOR);
+		pixman_region_clear(&self->cursor_buffer->buffer_damage);
+	}
+
 	struct wv_buffer* buffer = self->buffer;
 	self->buffer = NULL;
 
 	self->on_done(SCREENCOPY_DONE, buffer, self->userdata);
+
+	// TODO: Remove this after implementing:
+	if (self->cursor_buffer) {
+		wv_buffer_pool_release(self->cursor_pool, self->cursor_buffer);
+	}
 }
 
 static void surface_handle_failed(void *data,
@@ -296,6 +307,9 @@ static void surface_handle_failed(void *data,
 
 	wv_buffer_pool_release(self->pool, self->buffer);
 	self->buffer = NULL;
+
+	wv_buffer_pool_release(self->cursor_pool, self->cursor_buffer);
+	self->cursor_buffer = NULL;
 
 	if (reason == ZEXT_SCREENCOPY_SURFACE_V1_FAILURE_REASON_INVALID_BUFFER)
 		ext_screencopy_init_surface(self);
@@ -322,14 +336,11 @@ static void surface_handle_cursor_info(void *data,
 	if (has_damage)
 		wv_buffer_damage_whole(self->cursor_buffer);
 
-	wv_buffer_registry_damage_all(&self->cursor_buffer->frame_damage,
-			WV_BUFFER_DOMAIN_CURSOR);
-	pixman_region_clear(&self->cursor_buffer->buffer_damage);
+	if (has_damage)
+		log_debug("Cursor event%s: %"PRIu32" %"PRIu32"\n",
+				has_damage ? "(damaged)" : "", pos_x, pos_y);
 
 	// TODO: Implement
-
-	// TODO: Remove this after implementing:
-	wv_buffer_pool_release(self->cursor_pool, self->cursor_buffer);
 }
 
 static void surface_handle_cursor_enter(void *data,
