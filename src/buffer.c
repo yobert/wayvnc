@@ -378,10 +378,15 @@ void wv_buffer_pool_release(struct wv_buffer_pool* pool,
 	}
 }
 
-void wv_buffer_registry_damage_all(struct pixman_region16* region)
+void wv_buffer_registry_damage_all(struct pixman_region16* region,
+		enum wv_buffer_domain domain)
 {
+	if (domain == WV_BUFFER_DOMAIN_UNSPEC)
+		return;
+
 	struct wv_buffer *buffer;
 	LIST_FOREACH(buffer, &buffer_registry, registry_link)
-		pixman_region_union(&buffer->buffer_damage,
-				&buffer->buffer_damage, region);
+		if (buffer->domain == domain)
+			pixman_region_union(&buffer->buffer_damage,
+					&buffer->buffer_damage, region);
 }

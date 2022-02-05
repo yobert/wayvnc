@@ -36,6 +36,12 @@ enum wv_buffer_type {
 #endif
 };
 
+enum wv_buffer_domain {
+	WV_BUFFER_DOMAIN_UNSPEC = 0,
+	WV_BUFFER_DOMAIN_OUTPUT,
+	WV_BUFFER_DOMAIN_CURSOR,
+};
+
 struct wv_buffer {
 	enum wv_buffer_type type;
 	TAILQ_ENTRY(wv_buffer) link;
@@ -49,6 +55,8 @@ struct wv_buffer {
 	int width, height, stride;
 	uint32_t format;
 	bool y_inverted;
+
+	enum wv_buffer_domain domain;
 
 	struct pixman_region16 frame_damage;
 	struct pixman_region16 buffer_damage;
@@ -86,4 +94,5 @@ struct wv_buffer* wv_buffer_pool_acquire(struct wv_buffer_pool* pool);
 void wv_buffer_pool_release(struct wv_buffer_pool* pool,
 		struct wv_buffer* buffer);
 
-void wv_buffer_registry_damage_all(struct pixman_region16* region);
+void wv_buffer_registry_damage_all(struct pixman_region16* region,
+		enum wv_buffer_domain domain);
