@@ -224,6 +224,10 @@ struct zwlr_data_control_source_v1_listener data_control_source_listener = {
 };
 
 static struct zwlr_data_control_source_v1* set_selection(struct data_control* self, bool primary) {
+	if(!self->manager) {
+		return NULL;
+	}
+
 	struct zwlr_data_control_source_v1* selection;
 	selection = zwlr_data_control_manager_v1_create_data_source(self->manager);
 	if (selection == NULL) {
